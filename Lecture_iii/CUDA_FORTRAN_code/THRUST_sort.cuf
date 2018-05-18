@@ -1,0 +1,42 @@
+PROGRAM main
+
+! USE cudafor
+ USE thrust
+
+ IMPLICIT NONE
+
+ INTEGER(KIND=4), PARAMETER :: DIM=5000
+ REAL(KIND=8), ALLOCATABLE:: x_h(:)
+ REAL(KIND=8), DEVICE, ALLOCATABLE :: x_d(:)
+ INTEGER(KIND=4) :: i 
+
+ PRINT *,"CUDA-FORTRAN (Thrust) version"
+ PRINT *,"Allocate array on host and device."
+ ALLOCATE(x_h(DIM))
+ ALLOCATE(x_d(DIM))
+ PRINT *,"Done."
+
+ PRINT *,"Read data in host array."
+ OPEN( UNIT=10, FILE="5000_random_numbers.dat")
+ DO i=1, DIM
+  READ(10, *) x_h(i)
+ END DO
+ CLOSE(10)
+ PRINT *,"Done."
+
+
+ PRINT *,"Copy array to device."
+ x_d = x_h
+ PRINT *,"Done."
+ 
+ PRINT *,"Sorting 5000 real(8) elements on for validity check on device..."
+ CALL thrustsort(x_d,size(x_d))
+ PRINT *,"Done"
+ 
+ PRINT *,"Copy array to host."
+ x_h = x_d
+ PRINT *,"Done."
+ PRINT *,"Reference element:"
+ PRINT *,"x(2345)=", x_h(2345)
+END PROGRAM main
+

@@ -1,0 +1,77 @@
+#define N 7000
+
+MODULE interfaces
+
+USE cudafor
+
+INTERFACE
+  SUBROUTINE dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc) &
+              bind(c,name='cublasDgemm')
+   USE iso_c_binding
+   INTEGER(c_int), VALUE :: m, n, k, lda, ldb, ldc
+   REAL(c_double), DEVICE, DIMENSION(m,n) :: a, b, c
+   REAL(c_double), VALUE :: alpha, beta
+   CHARACTER(KIND=c_char), VALUE :: transa, transb
+  END SUBROUTINE dgemm
+
+  SUBROUTINE cublasinit() bind(c,name='cublasInit')
+  END SUBROUTINE cublasinit
+
+END INTERFACE
+
+END MODULE interfaces
+
+!===================================================================================
+
+PROGRAM main
+
+ USE interfaces
+
+ IMPLICIT NONE
+ 
+ REAL(KIND=8), ALLOCATABLE :: MA_h(:,:), MB_h(:,:), MC_h(:,:)
+ REAL(KIND=8), DEVICE, ALLOCATABLE ::  MA_d(:,:), MB_d(:,:), MC_d(:,:)
+ INTEGER(KIND=4) :: i,j
+ 
+ PRINT *, "CUDA_FORTRAN (cuBLAS) version 1"
+ PRINT *, "Initializing cuBLAS."
+
+ CALL cublasinit()
+
+ PRINT *, "Done."
+ WRITE(*,'(A12 x I5 x A1 x I5 x A33)') " Allocating ", N,"x", N," matrices MA, MB and MC on host."
+ ALLOCATE(MA_h(N,N))
+ ALLOCATE(MB_h(N,N))
+ ALLOCATE(MC_h(N,N))
+ PRINT *, "Done."
+ WRITE(*,'(A12 x I5 x A1 x I5 x A34)') " Allocating ", N,"x", N," matrices MA, MB and MC on device."
+ ALLOCATE(MA_d(N,N))
+ ALLOCATE(MB_d(N,N))
+ ALLOCATE(MC_d(N,N))
+ PRINT *, "Done."
+ PRINT *, "Filling host matrices with data."
+ 
+ DO i=1, N
+  DO j=1, N
+   MA_h(i,j) = REAL(MOD(i-1,10) + MOD(j-1,10) + 1,8)
+   MB_h(i,j) = REAL(MOD(i-1,8 ) + MOD(j-1,11) + 1,8)
+  END DO
+ END DO
+ 
+ PRINT *, "Done."
+ PRINT *, "Copy matrices from host to device."
+ MA_d = MA_h
+ MB_d = MB_h
+ PRINT *, "Done."
+ PRINT *, "Perform matrix multiplication on device."
+
+ CALL dgemm('n','n',N,N,N,1.0_8,MA_d,N,MB_d,N,0.0_8,MC_d,N)
+
+ PRINT *, "Done."
+ PRINT *, "Copy matrices from device to host."
+ MC_h = MC_d
+ PRINT *, "Done."
+ PRINT *, "Control element MC(123,456):"
+ PRINT *, MC_h(123,456)
+
+END PROGRAM main

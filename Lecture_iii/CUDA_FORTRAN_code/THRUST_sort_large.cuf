@@ -1,0 +1,40 @@
+PROGRAM main
+
+ USE thrust
+
+ IMPLICIT NONE
+
+ INTEGER(KIND=4), PARAMETER :: DIM=2**24
+ REAL(KIND=8), ALLOCATABLE:: x_h(:)
+ REAL(KIND=8), DEVICE, ALLOCATABLE :: x_d(:)
+ INTEGER(KIND=4) :: seed(2) 
+ INTEGER(KIND=4) :: i 
+
+ PRINT *,"CUDA-FORTRAN (Thrust) version"
+ PRINT *,"Allocate array on host and device."
+ ALLOCATE(x_h(DIM))
+ ALLOCATE(x_d(DIM))
+ PRINT *,"Done."
+
+ seed(1) = 12234
+ CALL RANDOM_SEED(PUT=seed)
+ PRINT *,"Fill host array with random doubles (on host)."
+ DO i=1, DIM
+  CALL RANDOM_NUMBER(HARVEST=x_h(i))
+ END DO
+ PRINT *,"Done."
+
+
+ PRINT *,"Copy array to device."
+ x_d = x_h
+ PRINT *,"Done."
+ 
+ PRINT *,"Sorting ", DIM, " real(8) elements on device..."
+ CALL thrustsort(x_d,size(x_d))
+ PRINT *,"Done"
+ 
+ PRINT *,"Copy array to host."
+ x_h = x_d
+ PRINT *,"Done."
+END PROGRAM main
+

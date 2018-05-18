@@ -1,0 +1,57 @@
+MODULE saxpy_m
+ 
+ CONTAINS
+
+ ATTRIBUTES(GLOBAL) SUBROUTINE saxpy( N, a, x, y)
+
+  REAL(KIND=4) :: x(:), y(:)
+  REAL(KIND=4):: a
+  INTEGER(KIND=4):: N
+  INTEGER(KIND=4) :: i 
+  ATTRIBUTES(VALUE) :: a, N
+  
+  i = threadIdx%x+(blockIdx%x-1)*blockDim%x
+  IF( i .LE. N) y(i) = a*x(i) + y(i)
+
+ END SUBROUTINE saxpy
+
+END MODULE saxpy_m
+
+PROGRAM main
+
+ USE cudafor
+ USE saxpy_m
+
+ IMPLICIT NONE
+ 
+ INTEGER(KIND=4), PARAMETER :: N=2**20
+ INTEGER(KIND=4), PARAMETER :: num=100000
+ REAL(KIND=4), PARAMETER :: a=2.0_4
+ REAL(KIND=4) :: x(N), y(N)
+ REAL(KIND=4), DEVICE :: x_d(N), y_d(N)
+ INTEGER(KIND=4) :: i
+ INTEGER(KIND=4) :: j
+
+ DO i=1, N
+  x(i) = REAL(i,4)
+  y(i) = REAL(2*i,4)
+ END DO 
+
+ x_d = x
+ y_d = y
+
+ PRINT *
+ WRITE(*,'(A10 X I7 X A36)') "Performing", num, "CUDA-Fortran saxpy on 2^20 elements."
+
+ DO j=1, num
+  CALL saxpy<<<(N+255)/256, 256>>>(N, a, x_d, y_d) 
+ END DO
+
+ y = y_d
+
+ PRINT *, "Done."
+ PRINT *, "y(213)=", y(213) 
+ PRINT*
+ 
+END PROGRAM main
+

@@ -1,0 +1,121 @@
+#define SIZE 1024
+#define START_SCALE 1.5_4
+#define MAXIT 256
+#define C_RE -0.8_4
+#define C_IM 0.156_4
+#define ZOOM 400
+
+MODULE julia_m
+
+ CONTAINS
+!======================================================================
+! This function checks whether a point
+! belongs to the filled julia set. It 
+! returns 0 if the value 'escaped', and
+! one if the maximal numer of iterations
+! has been reached. It is a function on the 
+! device, but it can't be called like a
+! kernel from the host. It is used by the
+! kernel 'construct_julia_set' below. Note that
+! the kernel has the 'global' attribute rather
+! than the 'device' attribute.
+
+ ATTRIBUTES(DEVICE) FUNCTION julia( i, j, scale)
+  INTEGER(KIND=4), VALUE :: i, j
+  INTEGER(KIND=4) :: julia
+  INTEGER(KIND=4) :: res
+  REAL(KIND=4) :: scale
+  REAL(KIND=4) :: x, y
+  COMPLEX(KIND=4) :: z
+  COMPLEX(KIND=4), PARAMETER :: c=CMPLX(C_RE,C_IM)
+  INTEGER(KIND=4) :: k
+  
+  !rescale grid to actual size
+  x=scale*REAL(SIZE/2-i,4)/REAL(SIZE/2,4)
+  y=scale*REAL(SIZE/2-j,4)/REAL(SIZE/2,4)
+  z = CMPLX(x,y)
+
+  !compute Z(n+1) = Z(n)^2 + C
+  DO k=1, MAXIT
+   z = z**2 + c
+   IF( SQRT(REAL(z)**2 + IMAG(z)**2) .GT. SIZE) THEN
+    res = 0_4
+    EXIT
+   END IF
+   res = 1_4
+  END DO
+  julia = res
+ END FUNCTION julia
+!======================================================================
+! This function uses the one defined above
+! to construct an array called 'set' with ones and zeroes, 
+! defining the elements of the julia set. This is the
+! kernel function to be called from the host and exectued
+! on the device. It thus carries the 'global' attribute.
+
+ ATTRIBUTES(GLOBAL) SUBROUTINE construct_julia_set( set, scale)
+ 
+  REAL(KIND=4), VALUE :: scale
+  INTEGER(KIND=4) :: set(:,:)
+  INTEGER(KIND=4) :: i, j
+
+  i = threadIdx%x+(blockIdx%x-1)*blockDim%x   !determine thread id i
+  j = threadIdx%y+(blockIdx%y-1)*blockDim%y   !determine thread id j
+  set(i,j) = julia( i, j, scale);             !fill the set
+ END SUBROUTINE construct_julia_set
+!======================================================================
+END MODULE julia_m
+!======================================================================
+
+PROGRAM main
+  
+ USE cudafor
+ USE julia_m
+ 
+ IMPLICIT NONE
+
+ INTEGER(KIND=4) :: set(SIZE,SIZE) 
+ INTEGER(KIND=4), DEVICE :: set_d(SIZE,SIZE) 
+ INTEGER(KIND=4) :: written
+ INTEGER(KIND=4) :: num
+ REAL(KIND=4) :: x
+ REAL(KIND=4) :: y
+ REAL(KIND=4) :: scale
+ CHARACTER(LEN=13) :: filename
+ INTEGER(KIND=4) :: i, j, k
+ TYPE(dim3) :: dimGrid, dimBlock
+ 100 FORMAT (F12.5 X F12.5)
+
+ dimBlock = dim3(16,16,1) !elementary block
+ dimGrid = dim3(CEILING(SIZE/16.0),CEILING(SIZE/16.0),1)
+ 
+ set = 0
+ set_d = set 
+ written = 0
+
+ DO k=1, ZOOM
+  scale = START_SCALE*(REAL(ZOOM,4) - REAL(k-1,4))/REAL(ZOOM,4) + 0.01
+  CALL construct_julia_set<<<dimGrid,dimBlock>>>(set_d, scale)
+  set = set_d  
+  filename = "julia_"
+  WRITE(filename(7:9), '(I0.3)') k-1
+  filename = filename(1:9) // '.dat'
+  OPEN (UNIT=10,FILE=filename,ACTION="WRITE",STATUS="REPLACE")
+  DO i=1, SIZE
+   x=scale*REAL(SIZE/2-i,4)/REAL(SIZE/2,4)
+   DO j=1, SIZE
+    y=scale*REAL(SIZE/2-j,4)/REAL(SIZE/2,4)
+    IF( set(i,j) .EQ. 1_4) THEN
+     WRITE(10,100) x, y
+     written = 1_4 
+    END IF 
+   END DO
+   IF( written .EQ. 1_4 ) THEN
+    WRITE(10,*)
+   END IF
+   written = 0
+  END DO 
+  CLOSE(10)
+ END DO
+
+END PROGRAM main

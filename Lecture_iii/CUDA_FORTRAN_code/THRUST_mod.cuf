@@ -1,0 +1,24 @@
+MODULE thrust
+
+ INTERFACE thrustsort
+  SUBROUTINE sort_int( input,N) bind(C,name="sort_int_wrapper")
+   USE iso_c_binding
+   INTEGER(c_int),device:: input(*)
+   INTEGER(c_int),value:: N
+  END SUBROUTINE
+
+  SUBROUTINE sort_float( input,N) bind(C,name="sort_float_wrapper")
+   USE iso_c_binding
+   REAL(c_float),device:: input(*)
+   INTEGER(c_int),value:: N
+  END SUBROUTINE
+
+  SUBROUTINE sort_double( input,N) bind(C,name="sort_double_wrapper")
+   USE iso_c_binding
+   REAL(c_double),device:: input(*)
+   INTEGER(c_int),value:: N
+  END SUBROUTINE
+ END INTERFACE
+
+END MODULE thrust
+

@@ -1,0 +1,65 @@
+PROGRAM cufinfo
+
+ USE cudafor
+
+ IMPLICIT NONE
+
+ INTEGER(KIND=4) :: istat, num, numdevices, driverver, ierr
+ TYPE(cudadeviceprop) :: prop
+
+ istat = cudaGetDeviceCount(numdevices)
+ IF (istat /= cudaSuccess) WRITE(*,*) cudaGetErrorString(ierr)
+ istat = cudaDriverGetVersion(driverver )
+
+ PRINT *, "CUDA device query..."
+ PRINT *, "Number of devices:", numdevices 
+ PRINT *, "==============================="
+ PRINT * 
+
+ DO num = 0, numdevices-1
+  istat = cudaGetDeviceProperties(prop, num)
+  CALL printDeviceProperties(prop, num)
+  PRINT*
+ END DO
+
+END PROGRAM cufinfo
+
+!=============================================================================
+
+SUBROUTINE printDeviceProperties(prop, num)
+
+ USE cudafor
+
+ IMPLICIT NONE
+ 
+ TYPE(cudadeviceprop) :: prop
+ INTEGER(KIND=4) :: num
+ INTEGER(KIND=4) :: len
+ 900 FORMAT (a,i0)
+ 901 FORMAT (a,a)
+ 902 FORMAT (a,i0,a)
+ 903 FORMAT (a,f7.3,a)
+ 904 FORMAT (a,2(i0,1x,'x',1x),i0)
+ 905 FORMAT (a,i0,'.',i0)
+ 906 FORMAT (a,l0)
+
+ len = verify(prop%name, ' ', .true.)
+ WRITE (*,900) "Device Number: "      ,num
+ WRITE (*,901) "Device Name: "        ,prop%name(1:len)
+ WRITE (*,903) "Total Global Memory: ",real(prop%totalGlobalMem)/1e9," Gbytes"
+ WRITE (*,902) "sharedMemPerBlock: "  ,prop%sharedMemPerBlock," bytes"
+ WRITE (*,900) "regsPerBlock: "       ,prop%regsPerBlock
+ WRITE (*,900) "warpSize: "           ,prop%warpSize
+ WRITE (*,900) "maxThreadsPerBlock: " ,prop%maxThreadsPerBlock
+ WRITE (*,904) "maxThreadsDim: "      ,prop%maxThreadsDim
+ WRITE (*,904) "maxGridSize: "        ,prop%maxGridSize
+ WRITE (*,903) "ClockRate: "          ,real(prop%clockRate)/1e6," GHz"
+ WRITE (*,902) "Total Const Memory: " ,prop%totalConstMem," bytes"
+ WRITE (*,905) "Compute Capability Revision: ",prop%major,prop%minor
+ WRITE (*,902) "TextureAlignment: "   ,prop%textureAlignment," bytes"
+ WRITE (*,906) "deviceOverlap: "      ,prop%deviceOverlap
+ WRITE (*,900) "multiProcessorCount: ",prop%multiProcessorCount
+ WRITE (*,906) "integrated: "         ,prop%integrated
+ WRITE (*,906) "canMapHostMemory: "   ,prop%canMapHostMemory
+
+END SUBROUTINE printDeviceProperties 

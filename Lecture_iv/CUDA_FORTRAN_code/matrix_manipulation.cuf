@@ -1,0 +1,151 @@
+#define ARRAYTAG 1
+
+MODULE matrix
+
+ CONTAINS
+!==============================================================
+ 
+ ATTRIBUTES(GLOBAL) SUBROUTINE manipulate_matrix( proc_id, i_part_size, N, N_work, M_part)
+ 
+  IMPLICIT NONE
+ 
+  INTEGER(KIND=4) , VALUE :: proc_id
+  INTEGER(KIND=4) , VALUE :: i_part_size
+  INTEGER(KIND=4) , VALUE :: N
+  INTEGER(KIND=4) , VALUE :: N_work
+  INTEGER(KIND=4)  :: i, j, k
+  INTEGER(KIND=4)  :: ip, jp, pos
+  REAL(KIND=8) :: M_part(:)
+
+  i = threadIdx%x+(blockIdx%x-1)*blockDim%x   !determine thread id i
+  j = threadIdx%y+(blockIdx%y-1)*blockDim%y   !determine thread id j   
+ 
+  ip = proc_id*i_part_size + i - 1
+  jp = j-1
+  pos = (i-1)*N + j
+  DO k=0, N_work-1
+   M_part(pos) = M_part(pos) + ATAN(REAL(MOD(ip+k+1,10),8)*ACOS(-1.0_8)+REAL(MOD(jp+k+1,5),8)*ACOS(-1.0_8)**2)
+  END DO
+
+ END SUBROUTINE manipulate_matrix
+
+!==============================================================
+
+ SUBROUTINE main_program( proc_id, num_procs, N, N_work)
+
+  USE cudafor
+  USE mpi
+
+  IMPLICIT NONE
+
+  INTEGER(KIND=4) :: i_part_size
+  REAL(KIND=8), ALLOCATABLE :: M_part(:)
+  REAL(KIND=8), DEVICE, ALLOCATABLE :: M_part_dev(:)
+  INTEGER(KIND=4) :: proc_id
+  INTEGER(KIND=4) :: num_procs
+  INTEGER(KIND=4) :: istat, ierr
+  INTEGER :: status(MPI_STATUS_SIZE)
+  INTEGER(KIND=4) :: N
+  INTEGER(KIND=4) :: N_work
+  INTEGER(KIND=4) :: i_stop, i_start, num, pos
+  INTEGER(KIND=4) :: i,j,k,l
+  REAL(KIND=8), ALLOCATABLE :: M(:)
+  REAL(KIND=8) ::trace
+  TYPE(dim3) :: dimGrid, dimBlock
+
+  i_part_size = N/num_procs 
+  dimBlock = dim3(16,16,1) !elementary block
+  dimGrid = dim3(CEILING(i_part_size/16.0),CEILING(N/16.0),1)
+  
+  ALLOCATE( M_part(N*i_part_size))
+
+  IF( proc_id .EQ. 0 ) THEN
+   PRINT*, "Preparing host matrix M (thread 0)."
+   ALLOCATE( M(N*N) )
+   M = 0.0_8
+   PRINT*, "Distributing matrix slices to available GPUs (thread 0)."
+   DO num=0, num_procs-1
+    PRINT *, "I am process number ", proc_id
+    i_start = num*i_part_size + 1;
+    i_stop  = num*i_part_size + i_part_size;
+    WRITE(*,'(A36 x I3 x A1 x I3 x A1)') " Preparing array for process number ", num+1, "/", num_procs, "."
+    WRITE(*,'(A26 x I6 x A14 x I6 x A1)') " In array M: start index: ", i_start, ", stop index: ", i_stop, "."
+    l = 1
+    DO i=i_start, i_stop
+     DO j=1, N
+      pos = (i-1)*N + j
+      M_part(l) = M(pos)
+      l=l+1
+     END DO
+    END DO
+    IF ( num .GT. 0 ) THEN
+     CALL MPI_Ssend(M_part, i_part_size*N, MPI_REAL8, num, ARRAYTAG, MPI_COMM_WORLD, ierr)
+    END IF
+   END DO
+   PRINT *,"Data distribution complete."
+  END IF
+ 
+  IF ( proc_id .NE.  0 ) THEN
+   CALL MPI_Recv(M_part, i_part_size*N, MPI_REAL8, 0, ARRAYTAG, MPI_COMM_WORLD,status,ierr)
+   WRITE(*,'(A16 x I3 x A20)') " Process number ", proc_id, " received partition."
+  END IF
+
+  
+  IF( proc_id .EQ. 0 ) THEN
+   PRINT*, "Switching to CUDA (all processes)."
+   PRINT*, "Allocating device memory."
+  END IF
+  
+  ALLOCATE(M_part_dev(N*i_part_size))
+  M_part_dev = M_part
+ 
+  WRITE(*,'(A16 x I3 x A23)') " Process number ", proc_id, " calls kernel function."
+  CALL manipulate_matrix<<<dimGrid,dimBlock>>>(proc_id, i_part_size, N, N_work, M_part_dev)
+  ierr = cudaDeviceSynchronize()
+
+  WRITE(*,'(A16 x I3 x A23)') " Process number ", proc_id, " kernel call finished."
+  M_part = M_part_dev  
+   
+  WRITE(*,'(A16 x I3 x A32)') " Process number ", proc_id, " data transfer to host finished."
+  CALL MPI_Barrier( MPI_COMM_WORLD, ierr )
+  
+  IF( proc_id .NE. 0 ) THEN
+   WRITE(*,'(A16 x I3 x A32)') " Process number ", proc_id, " sends results."
+   CALL MPI_Ssend(M_part, i_part_size*N, MPI_REAL8, 0, ARRAYTAG, MPI_COMM_WORLD, ierr)
+  END IF
+
+  IF( proc_id .EQ. 0 ) THEN
+   PRINT*, "Constructing first matrix partition (thread 0)."
+   DO i=1, i_part_size
+    DO j=1, N
+     pos = (i-1)*N + j
+     M(pos) = M_part(pos) 
+    END DO
+   END DO
+   PRINT*, "Done."
+   PRINT*, "Ready to receive data from other threads (thread 0)."
+   DO num=1, num_procs-1
+    CALL MPI_Recv(M_part, i_part_size*N, MPI_REAL8, num, ARRAYTAG, MPI_COMM_WORLD,status,ierr)
+    l=1
+    DO i=num*i_part_size+1, (num+1)*i_part_size
+     DO j=1, N
+      pos = N*(i-1) + j
+      M(pos) = M_part(l)
+      l = l+1
+     END DO
+    END DO
+   END DO
+   PRINT *, "Matrix M constructed."
+   PRINT *, "Computing trace."
+   trace = 0.0_8
+   DO i=1, N
+    trace = trace + M((i-1)*N + i)
+   END DO
+   PRINT *, "Done (thread 0)."
+   WRITE(*, '(A7 x F15.4)') " Trace: ", trace
+  END IF
+
+ END SUBROUTINE main_program
+
+!==============================================================
+END MODULE matrix
