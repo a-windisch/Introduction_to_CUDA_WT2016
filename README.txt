@@ -5,8 +5,16 @@
 #= host: helium.wustl.edu             =
 #======================================
 
-This is the soruce code as discussed in the lecture series.
-To build the executables, just type 'make'.
+This is the source code I prepared for a lecture series 
+I held at Washington University in St. Louis in 2016.
+To build the executables, just type 'make' (you may have
+to modify the Makefile to match your configuration).
+In order to compile the CUDA Fortran example, you 
+need the pgfortran compiler provided by The Portland Group
+(PGI). Feel free to use the code as you please. If you have
+any questions you can contact me using
+andreas.windisch@yahoo.com.
+
 The lecture is split into four parts.
 In the following, I provide a very short description of the
 contents of this package.
@@ -92,7 +100,7 @@ The folder C_code contains a 'saxpy' example which takes
 two vectors x and y, and produces x = a*x + y for each
 entry. The same problem is solved in CUDA_C and CUDA_FORTRAN
 and can be found in the corresponding folders. The example
-'saxpy_multiple' is similar to 'saxxpy', but it contains a 
+'saxpy_multiple' is similar to 'saxpy', but it contains a 
 loop wrapped around the actual saxpy execution to provide 
 more computational intensity, such that the effect of 
 dominant transfer times is suppressed.
@@ -110,7 +118,8 @@ algorithm. The problem is solved in C, CUDA_C and
 CUDA_FORTRAN, the executables can be found in the
 corresponding sub-folders. There is also a README file in 
 each subdirectory that explains how the data can be 
-processed to obtain an mp4 movie.
+processed to obtain an mp4 movie using the gnuplot scripts
+provided in the respective folders.
 ===========================================================
 Lecture iii
 ===========================================================
@@ -126,7 +135,7 @@ CUDA_FORTRAN.
 Lecture iv
 ===========================================================
 Lecture four is dedicated to multi-GPU programming,
-using both, MPI and CUDA un C and FORTRAN. We start
+using both, MPI with CUDA C and FORTRAN. We start
 with a simple C-code that computes entries of a matrix
 which is represented as a one-dimensional array (think
 of it as being a spatial lattice of some system you want
@@ -140,17 +149,17 @@ same problem is solved using CUDA-C and CUDA Fortran. The
 maximal allowed number of threads there is 4, as we only
 have 4 GPUs available. The lattice is split among the 
 available GPUs (using MPI), and the entries of the 
-partition are then computed using CUDA. The result
-is send to the master thread, which then assembles the
+partition are then computed using CUDA. The results
+are sent to the master thread, which then assembles the
 final matrix and computes the trace.
 Lecture iv also contains a very simple self-test example
 that allows you to check whether you can apply your 
-knowledge to write a CUDA C/FORTRAN program.
+knowledge to write a very simple CUDA C/FORTRAN program.
 I added a pre-compiled version of a device function 
 that can be called to provide you with the result of the test.
 Just follow the instructions provided in the README.txt in
 the CUDA-C/FORTRAN folder of Lecture iv.
-In each folder
-you also find a README file that contains instructions
+In each folder you also find a README file that contains instructions
 on how to run the program. 
+
 
